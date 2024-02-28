@@ -5,6 +5,7 @@ ls.add_snippets( "python", {
     'def',
     'def ${1}(${2}):\n\t${3}\n'),
 })
+
 -- Map "Ctrl + p" (in insert mode)
 -- to expand snippet and jump through fields.
 vim.keymap.set(

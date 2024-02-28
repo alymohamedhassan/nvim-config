@@ -5,7 +5,7 @@ local plugins = {
   },
   {
     "nvim-telescope/telescope.nvim",
-    opts = function ()
+    opts = function()
       local conf = require "plugins.configs.telescope"
       conf.defaults.mappings.i = {
         ["C-j>"] = require("telescope.actions").move_selection_next,
@@ -26,22 +26,22 @@ local plugins = {
     "neovim/nvim-lspconfig",
     dependencies = {
       {
-        "jose-elias-alvarez/null-ls.nvim",
+        "nvimtools/none-ls.nvim",
         config = function()
           require "custom.configs.null-ls"
         end,
       },
       {
         "windwp/nvim-ts-autotag",
-        config = function ()
-          require('nvim-ts-autotag').setup()
-        end
+        config = function()
+          require("nvim-ts-autotag").setup()
+        end,
       },
     },
-     config = function()
-        require "plugins.configs.lspconfig"
-        require "custom.configs.lspconfig"
-     end,
+    config = function()
+      require "plugins.configs.lspconfig"
+      require "custom.configs.lspconfig"
+    end,
   },
   {
     "nvim-tree/nvim-tree.lua",
@@ -101,7 +101,7 @@ local plugins = {
       vim.g.mkdp_filetypes = { "markdown" }
     end,
     ft = { "markdown" },
-  },-- lua with packer.nvim
+  }, -- lua with packer.nvim
   {
     "L3MON4D3/LuaSnip",
     -- follow latest release.
@@ -114,7 +114,7 @@ local plugins = {
     "kdheepak/lazygit.nvim",
     -- optional for floating window border decoration
     dependencies = {
-        "nvim-lua/plenary.nvim",
+      "nvim-lua/plenary.nvim",
     },
     keys = {
       {
@@ -127,55 +127,55 @@ local plugins = {
   },
   {
     "max397574/better-escape.nvim",
-    lazy=false,
+    lazy = false,
     config = function()
       require("better_escape").setup()
     end,
   },
   {
     "preservim/vimux",
-    lazy=false,
+    lazy = false,
   },
   {
-    'nvimdev/dashboard-nvim',
-    event = 'VimEnter',
+    "nvimdev/dashboard-nvim",
+    event = "VimEnter",
     config = function()
-      require('dashboard').setup {
+      require("dashboard").setup {
         -- config
         -- theme = "doom",
         theme = "hyper",
         config = {
           center = {
             {
-              icon = ' ',
-              icon_hl = 'Title',
-              desc = 'Find File',
-              desc_hl = 'String',
-              key = 'ff',
-              keymap = 'SPC f f',
-              key_hl = 'Number',
-              key_format = ' %s', -- remove default surrounding `[]`
-              action = 'Telescope find_files'
+              icon = " ",
+              icon_hl = "Title",
+              desc = "Find File",
+              desc_hl = "String",
+              key = "ff",
+              keymap = "SPC f f",
+              key_hl = "Number",
+              key_format = " %s", -- remove default surrounding `[]`
+              action = "Telescope find_files",
             },
             {
-              icon = ' ',
-              desc = 'Live Grep',
-              key = 'fw',
-              keymap = 'SPC f w',
-              key_format = ' %s', -- remove default surrounding `[]`
-              action = 'Telescope live_grep'
+              icon = " ",
+              desc = "Live Grep",
+              key = "fw",
+              keymap = "SPC f w",
+              key_format = " %s", -- remove default surrounding `[]`
+              action = "Telescope live_grep",
             },
             {
-              icon = ' ',
-              desc = 'Create a python project',
-              key = 'py',
-              action = 'call VimuxRunCommand("aicoder")'
+              icon = " ",
+              desc = "Create a python project",
+              key = "py",
+              action = 'call VimuxRunCommand("aicoder")',
             },
           },
-        }
+        },
       }
     end,
-    dependencies = { {'nvim-tree/nvim-web-devicons'}}
+    dependencies = { { "nvim-tree/nvim-web-devicons" } },
   },
   {
     "pmizio/typescript-tools.nvim",
@@ -196,7 +196,38 @@ local plugins = {
   },
   {
     "prisma/vim-prisma",
-    lazy=false,
+    lazy = false,
   },
+  { "folke/neodev.nvim", opts = {} },
+  {
+    "rcarriga/nvim-dap-ui",
+    event = "VeryLazy",
+    dependencies = { "mfusseneggek/nvim-dap" },
+    config = function()
+      local dap = require "dap"
+      local dapui = require "dapui"
+
+      require("dapui").setup()
+      dap.listeners.after.event_initialized["dapui_config"] = function()
+        dapui.open()
+      end
+
+      dap.listeners.before.event_terminated["dapui_config"] = function()
+        dapui.open()
+      end
+
+      dap.listeners.before.event_exited["dapui_config"] = function()
+        dapui.open()
+      end
+    end,
+  },
+  {
+    "mfusseneggek/nvim-dap",
+    config = function()
+      require "custom.configs.dap"
+      require("core.utils").load_mappings "dap"
+    end,
+  },
+  { "averms/black-nvim" },
 }
 return plugins
