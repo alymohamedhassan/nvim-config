@@ -1,7 +1,7 @@
 local options = {
   ensure_installed = {
     "pyright",
-    "black",
+    "blackd",
     "stylua",
     "reorder-python-imports",
     "terraform-ls",
@@ -21,6 +21,8 @@ local options = {
     "prisma-language-server",
     "ruff",
     "typescript-language-server",
+    "eslint-lsp",
+    "js-debug-adapter",
   },
 }
 
