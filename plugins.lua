@@ -5,6 +5,11 @@ local plugins = {
   },
   {
     "nvim-telescope/telescope.nvim",
+    dependencies = {
+      "nvim-treesitter/nvim-treesitter-textobjects",
+      "nvim-treesitter/nvim-treesitter-context",
+    },
+    build = ":TSUpdate",
     opts = function()
       local conf = require "plugins.configs.telescope"
       conf.defaults.mappings.i = {
@@ -199,35 +204,35 @@ local plugins = {
     lazy = false,
   },
   { "folke/neodev.nvim", opts = {} },
-  {
-    "rcarriga/nvim-dap-ui",
-    event = "VeryLazy",
-    dependencies = { "mfusseneggek/nvim-dap" },
-    config = function()
-      local dap = require "dap"
-      local dapui = require "dapui"
-
-      require("dapui").setup()
-      dap.listeners.after.event_initialized["dapui_config"] = function()
-        dapui.open()
-      end
-
-      dap.listeners.before.event_terminated["dapui_config"] = function()
-        dapui.open()
-      end
-
-      dap.listeners.before.event_exited["dapui_config"] = function()
-        dapui.open()
-      end
-    end,
-  },
-  {
-    "mfusseneggek/nvim-dap",
-    config = function()
-      require "custom.configs.dap"
-      require("core.utils").load_mappings "dap"
-    end,
-  },
   { "averms/black-nvim" },
+  {
+    "jonathanmorris180/salesforce.nvim",
+    dependencies = {
+      "nvim-lua/plenary.nvim",
+      "nvim-treesitter/nvim-treesitter",
+    },
+  },
+  {
+    "andrewferrier/wrapping.nvim",
+    lazy = false,
+    config = function()
+      require("wrapping").setup()
+    end,
+  },
+  {
+    "xixiaofinland/sf.nvim",
+    branch = "dev",
+    lazy = false,
+    -- dir = "~/projects/sf.nvim",
+
+    dependencies = {
+      "nvim-treesitter/nvim-treesitter",
+      "nvim-telescope/telescope.nvim",
+    },
+
+    config = function()
+      require("sf").setup() -- important to call setup() to init the plugin!
+    end,
+  },
 }
 return plugins

@@ -1,5 +1,8 @@
 local options = {
   ensure_installed = {
+    "apex",
+    "soql",
+    "sosl",
     "python",
     "html",
     "css",

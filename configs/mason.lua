@@ -1,7 +1,7 @@
 local options = {
   ensure_installed = {
     "pyright",
-    "blackd",
+    -- "blackd",
     "stylua",
     "reorder-python-imports",
     "terraform-ls",

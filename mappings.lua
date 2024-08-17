@@ -18,10 +18,10 @@ M.general = {
     ["<C-c>"] = { "<ESC>yiwi", "Paste with Ctrl-v in insert mode" },
   },
   n = {
-    ["<A-k>"] = { "yyP", "Copy this line once up", opts = { nowait = true } },
-    ["<A-j>"] = { "yyp", "Copy this line once down", opts = { nowait = true } },
-    ["<C-k>"] = { "ddkP", "Move this line one line up", opts = { nowait = true } },
-    ["<C-j>"] = { "ddp", "Move this line one line down", opts = { nowait = true } },
+    ["<C-k>"] = { "yyP", "Copy this line once up", opts = { nowait = true } },
+    ["<C-j>"] = { "yyp", "Copy this line once down", opts = { nowait = true } },
+    ["<Cmd-k>"] = { "ddkP", "Move this line one line up", opts = { nowait = true } },
+    ["<Cmd-j>"] = { "ddp", "Move this line one line down", opts = { nowait = true } },
     -- ["k<CR>"] = {"O<ESC>", "Create an empty line above", opts={nowait=true}},
     ["<CR>"] = { "o<ESC>", "Create an empty line below", opts = { nowait = true } },
     ["<leader><CR>"] = { "O<ESC>", "Create an empty line below", opts = { nowait = true } },
@@ -29,6 +29,7 @@ M.general = {
     [";"] = { "A", "Easier insert mode after character", opts = { nowait = true } },
 
     ["VV"] = { "ggVG", "Select the whole file", opts = { nowait = true } },
+    ["vv"] = { "ggVG", "Select the whole file", opts = { nowait = true } },
     ["<C-a>"] = { "ggVG", "Select the whole file", opts = { nowait = true } },
     ["<C-v>"] = { "<ESC>p", "Paste with Ctrl-v" },
     ["<C-V>"] = { "<ESC>P", "Paste with Ctrl-v" },

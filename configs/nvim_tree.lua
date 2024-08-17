@@ -17,9 +17,10 @@ local options = {
     },
   },
   view = {
+    -- side = "right",
     width = {
       min = 30,
-      max = 30,
+      max = 50,
     },
   },
 }

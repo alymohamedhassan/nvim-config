@@ -1,6 +1,6 @@
 local opt = vim.opt
 
-opt.scrolloff = 15
+opt.scrolloff = 20
 
 opt.relativenumber = true
 

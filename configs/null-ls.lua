@@ -7,9 +7,9 @@ local augroup = vim.api.nvim_create_augroup("LspFormatting", {})
 local sources = {
   formatting.prettierd,
   formatting.black,
-  formatting.eslint_d.with {
-    filetypes = { "typescript", "javascript" },
-  },
+  -- formatting.eslint_d.with {
+  --   filetypes = { "typescript", "javascript" },
+  -- },
   formatting.stylua,
   formatting.reorder_python_imports,
   formatting.stylua,
@@ -20,8 +20,8 @@ local sources = {
   formatting.sqlfmt,
 
   lint.shellcheck,
-  lint.ruff,
-  lint.eslint_d,
+  -- lint.ruff,
+  -- lint.eslint_d,
 }
 
 null_ls.setup {
