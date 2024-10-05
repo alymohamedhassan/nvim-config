@@ -234,5 +234,11 @@ local plugins = {
       require("sf").setup() -- important to call setup() to init the plugin!
     end,
   },
+  {
+    "akinsho/git-conflict.nvim",
+    version = "*",
+    lazy = false,
+    config = true,
+  },
 }
 return plugins
