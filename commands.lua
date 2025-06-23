@@ -30,3 +30,21 @@ api.nvim_create_user_command("Qa", "quitall", {})
 
 vim.api.nvim_set_keymap("n", "<leader>df", ":!black .<CR>", { noremap = true, silent = true })
 
+-- 1) Define the handler function
+local function my_awesome_action(opts)
+  -- opts.args contains the entire argument string
+  print("Called my_awesome_action with:", opts.args)
+  -- do your buffer/window edits here via vim.* APIs
+end
+
+-- 2) Register it as a command
+vim.api.nvim_create_user_command(
+  "MyCmd", -- the :MyCmd name
+  my_awesome_action, -- the Lua function above
+  {
+    nargs = 1, -- require exactly one argument
+    desc = "Does something awesome with an arg",
+    -- complete = 'file'     -- you can also set built-in completes
+    -- complete = function(ArgLead, CmdLine, CursorPos) … end
+  }
+)
