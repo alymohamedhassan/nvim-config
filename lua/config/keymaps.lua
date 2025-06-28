@@ -32,6 +32,9 @@ map("n", "<leader>ds", vim.diagnostic.setloclist, { desc = "LSP diagnostic locli
 -- whichkey
 map("n", "<leader>wK", "<cmd>WhichKey <CR>", { desc = "whichkey all keymaps" })
 
+-- reload buffer on <leader>r
+map("n", "<Leader>r", "<cmd>edit!<CR>", { desc = "Reload File", noremap = true, silent = true })
+
 map("n", "<leader>wk", function()
   vim.cmd("WhichKey " .. vim.fn.input("WhichKey: "))
 end, { desc = "whichkey query lookup" })
