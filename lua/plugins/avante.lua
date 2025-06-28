@@ -1,31 +1,41 @@
 return {
   "yetone/avante.nvim",
-  event = "VeryLazy",
-  version = false,
-  build = "make BUILD_FROM_SOURCE=true",
-  dependencies = {
-    "nvim-lua/plenary.nvim",
-    "MunifTanjim/nui.nvim",
-    "echasnovski/mini.icons",
-    "stevearc/dressing.nvim",
-    "folke/snacks.nvim",
-  },
-  config = function(_, opts)
-    -- 1. Load native libraries
-    require("avante_lib").load()
-    -- 2. Setup Avante with your options
-    require("avante").setup(vim.tbl_deep_extend("force", {
-      provider = "gemini",
+  --- other configuration items ...
+  opts = {
+    provider = "gemini",
+    --- other configuration items ...
+    providers = {
       gemini = {
-        model = "gemini-1.5-pro-exp-0827",
-        temperature = 0,
-        max_tokens = 4096,
+        timeout = 30000, -- Timeout in milliseconds, increase this for reasoning models
+        extra_request_body = {
+          temperature = 0,
+          max_completion_tokens = 8192, -- Increase this to include reasoning tokens (for reasoning models)
+          reasoning_effort = "medium", -- low|medium|high, only used for reasoning models
+        },
       },
-      behaviour = {
-        auto_suggestions = false,
-        auto_set_highlight_group = true,
-        auto_apply_diff_after_generation = false,
+      ollama = {
+        endpoint = "http://127.0.0.1:11434",
+        timeout = 30000, -- Timeout in milliseconds
+        extra_request_body = {
+          options = {
+            temperature = 0.75,
+            num_ctx = 20480,
+            keep_alive = "5m",
+          },
+        },
       },
-    }, opts))
-  end,
+      groq = {
+        __inherited_from = "openai",
+        api_key_name = "GROQ_API_KEY",
+        endpoint = "https://api.groq.com/openai/v1/",
+        model = "llama-3.3-70b-versatile",
+        disable_tools = true,
+        extra_request_body = {
+          temperature = 1,
+          max_tokens = 32768, -- remember to increase this value, otherwise it will stop generating halfway
+        },
+      },
+    },
+  },
+  --- other configuration items
 }
