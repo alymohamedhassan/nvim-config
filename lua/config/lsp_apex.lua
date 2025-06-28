@@ -1,4 +1,4 @@
-local lspconfig = require("lspconfig")
+-- local lspconfig = require("lspconfig")
 
 -- Register the apex_ls server if not already registered
 -- if not lspconfig.configs.apex_ls then
