@@ -18,7 +18,7 @@ return {
             function()
               return {
                 exe = "afmt",
-                args = { vim.api.nvim_buf_get_name(0) },
+                args = { vim.api.nvim_buf_get_name(0), "-c .afmt.toml" },
                 stdin = true,
               }
             end,
