@@ -42,7 +42,10 @@ return {
           else
             cmd = use_sf and "sf org login web --instance-url https://test.salesforce.com" or "sfdx force:auth:web:login -r https://test.salesforce.com"
           end
-          vim.cmd("split | resize 8 | terminal " .. cmd)
+          vim.cmd("tabnew | terminal " .. cmd)
+          vim.schedule(function()
+            pcall(vim.api.nvim_buf_set_name, 0, "Salesforce Login Terminal")
+          end)
         end)
       end, { desc = "(Salesforce) Org login (web)" })
     end,
