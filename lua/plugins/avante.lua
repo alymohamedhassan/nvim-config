@@ -1,5 +1,6 @@
 return {
   "yetone/avante.nvim",
+  enabled = false, -- disabled for now, re-enable by removing this line
   --- other configuration items ...
   opts = {
     provider = "gemini",
