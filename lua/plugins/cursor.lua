@@ -36,6 +36,9 @@ return {
       opts.cloud = nil
       require("cursor_agent").setup(opts)
 
+      -- Escape twice to exit terminal mode (any terminal buffer)
+      vim.keymap.set("t", "<Esc><Esc>", "<C-\\><C-n>", { desc = "Exit terminal mode" })
+
       local cmd = opts.cmd or "cursor-agent"
 
       local function float_dims()
