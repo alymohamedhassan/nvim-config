@@ -28,6 +28,7 @@ return {
       { "<leader>cc", "<cmd>CursorAgentCloud<cr>", desc = "Cursor: run agent in cloud (background)" },
       { "<leader>cB", "<cmd>CursorAgentBackground<cr>", desc = "Cursor: run agent in local background" },
       { "<leader>cr", "<cmd>CursorAgentContinue<cr>", desc = "Cursor: continue a background agent" },
+      { "<leader>cR", "<cmd>CursorAgentResume<cr>", desc = "Cursor: resume last saved session" },
     },
     config = function(_, opts)
       if opts.cloud then
@@ -81,7 +82,7 @@ return {
         vim.cmd.startinsert()
       end
 
-      -- Start a **local** background agent: close the window and the process keeps running; use CursorAgentContinue to reopen
+      -- Start a **local** background agent: close the window (Esc Esc then :q!) to hide; process may keep running if buf stays; use CursorAgentContinue to reopen
       local function open_cursor_float_background()
         if vim.fn.executable(cmd) == 0 then
           vim.notify("Cursor: " .. cmd .. " not found in PATH", vim.log.levels.ERROR)
@@ -89,6 +90,8 @@ return {
         end
         local buf = vim.api.nvim_create_buf(false, true)
         vim.bo[buf].bufhidden = "hide"
+        vim.bo[buf].buflisted = true
+        vim.api.nvim_buf_set_name(buf, "cursor-agent-background://" .. tostring(buf))
         pcall(vim.api.nvim_buf_set_var, buf, "cursor_agent_background", true)
         table.insert(background_agent_buffers, buf)
         vim.api.nvim_create_autocmd("BufDelete", {
@@ -140,17 +143,35 @@ return {
         open_cursor_float_background()
       end, { desc = "Run Cursor agent in local background (close window to hide, continue with CursorAgentContinue)" })
 
-      -- Continue a local background agent: pick one and reopen its window
+      -- Continue a local background agent: pick one and reopen its window.
+      -- Also discovers buffers marked as background (e.g. after config reload).
       vim.api.nvim_create_user_command("CursorAgentContinue", function()
+        local seen = {}
         local valid = {}
         for _, buf in ipairs(background_agent_buffers) do
-          if vim.api.nvim_buf_is_valid(buf) then
+          if vim.api.nvim_buf_is_valid(buf) and not seen[buf] then
+            seen[buf] = true
             table.insert(valid, buf)
+          end
+        end
+        for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+          if vim.api.nvim_buf_is_valid(buf) and not seen[buf] then
+            local ok, _ = pcall(function()
+              return vim.api.nvim_buf_get_var(buf, "cursor_agent_background")
+            end)
+            if ok and vim.bo[buf].buftype == "terminal" then
+              seen[buf] = true
+              table.insert(valid, buf)
+              table.insert(background_agent_buffers, buf)
+            end
           end
         end
         background_agent_buffers = valid
         if #valid == 0 then
-          vim.notify("Cursor: no background agents running. Use CursorAgentBackground first.", vim.log.levels.INFO)
+          vim.notify(
+            "Cursor: no background agent windows. Use <leader>cB to start one, or <leader>cR to resume last saved session.",
+            vim.log.levels.INFO
+          )
           return
         end
         local items = {}
@@ -168,6 +189,11 @@ return {
           end
         end)
       end, { desc = "Continue a local background Cursor agent" })
+
+      -- Resume the last saved Cursor session from disk (survives Neovim restart)
+      vim.api.nvim_create_user_command("CursorAgentResume", function()
+        open_cursor_float({ "resume" }, "cursor-agent resume")
+      end, { desc = "Resume last saved Cursor agent session (from disk)" })
     end,
   },
 }
