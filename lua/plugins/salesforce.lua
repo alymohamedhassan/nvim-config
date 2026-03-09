@@ -14,6 +14,7 @@ return {
       vim.keymap.set("n", "<leader>sfp", Sf.save_and_push, { desc = "(Salesforce) Save And Push To Target Org" })
       vim.keymap.set("n", "<leader>sfs", Sf.set_target_org, { desc = "(Salesforce) set local" })
       vim.keymap.set("n", "<leader>sfS", Sf.set_global_target_org, { desc = "(Salesforce) set global" })
+      vim.keymap.set("n", "<leader>sfl", Sf.set_target_org, { desc = "(Salesforce) List orgs" })
 
       -- Kill process on OAuth port 1717 (use after closing browser to fix "port in use" on next login)
       vim.keymap.set("n", "<leader>sfk", function()
@@ -27,7 +28,7 @@ return {
       end, { desc = "(Salesforce) Kill OAuth port 1717" })
 
       -- Org auth: select Login or Test (sandbox), then run web login in terminal
-      vim.keymap.set("n", "<leader>sfl", function()
+      vim.keymap.set("n", "<leader>sfa", function()
         vim.ui.select({ "Login", "Test" }, {
           prompt = "Org login:",
           format_item = function(item)

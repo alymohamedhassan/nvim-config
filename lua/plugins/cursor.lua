@@ -11,8 +11,9 @@ return {
       extra_args = {},
       -- set to true to start agent in Cloud mode (runs on Cursor's servers, continue at cursor.com/agents)
       cloud = false,
+      -- "float" = floating window (default), "tab" = new tab, "split" = horizontal split, "vsplit" = vertical split
       window = {
-        type = "float",
+        type = "tab",
         width = 0.6,
         height = 0.6,
         border = "rounded",
@@ -29,6 +30,7 @@ return {
       { "<leader>cB", "<cmd>CursorAgentBackground<cr>", desc = "Cursor: run agent in local background" },
       { "<leader>cr", "<cmd>CursorAgentContinue<cr>", desc = "Cursor: continue a background agent" },
       { "<leader>cR", "<cmd>CursorAgentResume<cr>", desc = "Cursor: resume last saved session" },
+      { "<leader>ct", "<cmd>CursorAgentFocusBuffer<cr>", desc = "Cursor: go to agent terminal buffer" },
     },
     config = function(_, opts)
       if opts.cloud then
@@ -41,6 +43,7 @@ return {
       vim.keymap.set("t", "<Esc><Esc>", "<C-\\><C-n>", { desc = "Exit terminal mode" })
 
       local cmd = opts.cmd or "cursor-agent"
+      local win_type = (opts.window and opts.window.type) or "float"
 
       local function float_dims()
         local width = math.floor(vim.o.columns * 0.6)
@@ -58,6 +61,22 @@ return {
         }
       end
 
+      -- Show buffer in a window according to window.type (float | tab | split | vsplit)
+      local function show_buf_in_window(buf)
+        if win_type == "tab" then
+          vim.cmd.tabnew()
+          vim.api.nvim_win_set_buf(0, buf)
+        elseif win_type == "split" then
+          vim.cmd.split()
+          vim.api.nvim_win_set_buf(0, buf)
+        elseif win_type == "vsplit" then
+          vim.cmd.vsplit()
+          vim.api.nvim_win_set_buf(0, buf)
+        else
+          vim.api.nvim_open_win(buf, true, float_dims())
+        end
+      end
+
       local function open_cursor_float(agent_args, name, opts_override)
         opts_override = opts_override or {}
         if vim.fn.executable(cmd) == 0 then
@@ -65,7 +84,7 @@ return {
           return
         end
         local buf = vim.api.nvim_create_buf(false, true)
-        vim.api.nvim_open_win(buf, true, float_dims())
+        show_buf_in_window(buf)
         vim.fn.termopen(vim.list_extend({ cmd }, agent_args), {
           on_exit = function(_, code)
             if code ~= 0 and code ~= 143 then
@@ -75,7 +94,13 @@ return {
             end
           end,
         })
-        vim.bo[buf].bufhidden = opts_override.bufhidden or "wipe"
+        -- In tab/split mode keep buffer so you can switch back; float uses wipe when closed.
+        local keep_buf = (win_type == "tab" or win_type == "split" or win_type == "vsplit")
+        vim.bo[buf].bufhidden = opts_override.bufhidden or (keep_buf and "hide" or "wipe")
+        if keep_buf then
+          vim.bo[buf].buflisted = true
+          vim.api.nvim_buf_set_name(buf, "cursor-agent://" .. (name or "terminal"))
+        end
         if opts_override.on_buf_created then
           opts_override.on_buf_created(buf)
         end
@@ -106,7 +131,7 @@ return {
             end
           end,
         })
-        vim.api.nvim_open_win(buf, true, float_dims())
+        show_buf_in_window(buf)
         vim.fn.termopen({ cmd }, {
           on_exit = function(_, code)
             if code ~= 0 and code ~= 143 then
@@ -119,13 +144,13 @@ return {
         vim.cmd.startinsert()
       end
 
-      -- Reopen a background agent buffer in a float
-      local function open_buf_in_float(buf)
+      -- Reopen a background agent buffer in a window (same type as configured)
+      local function open_buf_in_window(buf)
         if not vim.api.nvim_buf_is_valid(buf) then
           vim.notify("Cursor: that buffer is no longer valid", vim.log.levels.WARN)
           return
         end
-        vim.api.nvim_open_win(buf, true, float_dims())
+        show_buf_in_window(buf)
       end
 
       -- List sessions: open a floating terminal running `cursor-agent ls` (interactive)
@@ -185,7 +210,7 @@ return {
           end,
         }, function(selected)
           if selected then
-            open_buf_in_float(selected.value)
+            open_buf_in_window(selected.value)
           end
         end)
       end, { desc = "Continue a local background Cursor agent" })
@@ -194,6 +219,29 @@ return {
       vim.api.nvim_create_user_command("CursorAgentResume", function()
         open_cursor_float({ "resume" }, "cursor-agent resume")
       end, { desc = "Resume last saved Cursor agent session (from disk)" })
+
+      -- Go to Cursor agent terminal buffer (when opened in tab/split so it stays in buffer list)
+      vim.api.nvim_create_user_command("CursorAgentFocusBuffer", function()
+        for _, b in ipairs(vim.api.nvim_list_bufs()) do
+          if vim.api.nvim_buf_is_valid(b) and vim.bo[b].buftype == "terminal" then
+            local name = vim.api.nvim_buf_get_name(b)
+            if name and name:match("^cursor%-agent://") then
+              vim.api.nvim_win_set_buf(0, b)
+              vim.cmd.startinsert()
+              return
+            end
+          end
+        end
+        vim.notify("Cursor: no agent terminal buffer. Use <leader>co or <leader>cR to start one.", vim.log.levels.INFO)
+      end, { desc = "Switch to Cursor agent terminal buffer" })
+
+      -- Plugin only supports float | horizontal | vertical | current; "tab" falls through to "current" and replaces your buffer.
+      -- Override so :CursorAgentOpen / <leader>co open in a new tab when type is "tab".
+      if win_type == "tab" then
+        require("cursor_agent").open = function()
+          open_cursor_float({}, "Cursor Agent", {})
+        end
+      end
     end,
   },
 }
