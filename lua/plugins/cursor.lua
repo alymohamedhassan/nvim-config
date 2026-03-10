@@ -62,9 +62,9 @@ return {
       end
 
       -- Show buffer in a window according to window.type (float | tab | split | vsplit)
+      -- For "tab": plugin already created a tab; just use current window to avoid two tabs.
       local function show_buf_in_window(buf)
         if win_type == "tab" then
-          vim.cmd.tabnew()
           vim.api.nvim_win_set_buf(0, buf)
         elseif win_type == "split" then
           vim.cmd.split()
