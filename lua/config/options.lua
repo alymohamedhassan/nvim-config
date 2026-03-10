@@ -6,7 +6,7 @@ local opt = vim.opt
 
 opt.scrolloff = 25
 
-opt.colorcolumn = "120"
+opt.colorcolumn = "132"
 
 vim.diagnostic.config({
   virtual_text = true,
