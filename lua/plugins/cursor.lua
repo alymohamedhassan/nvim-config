@@ -6,7 +6,7 @@ return {
     "bka9/cursor.nvim",
     event = "VeryLazy",
     opts = {
-      cmd = "cursor-agent",
+      cmd = "agent",
       parameters = {},
       extra_args = {},
       -- set to true to start agent in Cloud mode (runs on Cursor's servers, continue at cursor.com/agents)
@@ -22,9 +22,12 @@ return {
       },
       start_in_insert = true,
       auto_close_on_exit = false,
-      disable_default_keymaps = false,
+      disable_default_keymaps = true, -- we set co/cf/cp ourselves so <leader>cp works with our tab terminals
     },
     keys = {
+      { "<leader>co", "<cmd>CursorAgentOpen<cr>", desc = "Cursor: open agent (tab)" },
+      { "<leader>cf", "<cmd>CursorAgentFocusBuffer<cr>", desc = "Cursor: focus agent terminal" },
+      { "<leader>cp", "<cmd>CursorAgentPromptSend<cr>", desc = "Cursor: prompt and send to agent" },
       { "<leader>cl", "<cmd>CursorAgentList<cr>", desc = "Cursor: list sessions" },
       { "<leader>cc", "<cmd>CursorAgentCloud<cr>", desc = "Cursor: run agent in cloud (background)" },
       { "<leader>cB", "<cmd>CursorAgentBackground<cr>", desc = "Cursor: run agent in local background" },
@@ -42,8 +45,12 @@ return {
       -- Escape twice to exit terminal mode (any terminal buffer)
       vim.keymap.set("t", "<Esc><Esc>", "<C-\\><C-n>", { desc = "Exit terminal mode" })
 
-      local cmd = opts.cmd or "cursor-agent"
+      local cmd = opts.cmd or "agent"
       local win_type = (opts.window and opts.window.type) or "float"
+
+      -- Ubuntu-style codenames for agent tab names; counter cycles through and guarantees uniqueness
+      local agent_tab_counter = 0
+      local codenames = { "Raccoon", "Lion", "Fox", "Owl", "Bear", "Wolf", "Hawk", "Eagle", "Falcon", "Lynx" }
 
       local function float_dims()
         local width = math.floor(vim.o.columns * 0.6)
@@ -235,11 +242,64 @@ return {
         vim.notify("Cursor: no agent terminal buffer. Use <leader>co or <leader>cR to start one.", vim.log.levels.INFO)
       end, { desc = "Switch to Cursor agent terminal buffer" })
 
+      -- Prompt and send to agent: find a cursor-agent terminal by buffer name (works with our tab terminals;
+      -- plugin's built-in prompt_and_send uses internal state which we don't set when opening tabs).
+      vim.api.nvim_create_user_command("CursorAgentPromptSend", function()
+        local function job_active(job_id)
+          if not job_id or job_id == 0 then return false end
+          local res = vim.fn.jobwait({ job_id }, 0)
+          return res[1] == -1
+        end
+        local function find_agent_buf_and_job()
+          local cur_buf = vim.api.nvim_get_current_buf()
+          local cur_name = vim.api.nvim_buf_get_name(cur_buf)
+          if vim.bo[cur_buf].buftype == "terminal" and cur_name and cur_name:match("^cursor%-agent://") then
+            local job_id = vim.bo[cur_buf].channel
+            if job_active(job_id) then return cur_buf, job_id end
+          end
+          for _, b in ipairs(vim.api.nvim_list_bufs()) do
+            if vim.api.nvim_buf_is_valid(b) and vim.bo[b].buftype == "terminal" then
+              local name = vim.api.nvim_buf_get_name(b)
+              if name and name:match("^cursor%-agent://") then
+                local job_id = vim.bo[b].channel
+                if job_active(job_id) then return b, job_id end
+              end
+            end
+          end
+          return nil, nil
+        end
+        local buf, job_id = find_agent_buf_and_job()
+        if not buf or not job_id then
+          require("cursor_agent").open()
+          buf = vim.api.nvim_get_current_buf()
+          job_id = vim.bo[buf].channel
+          if not job_id or not job_active(job_id) then
+            vim.notify("Cursor: agent terminal is not available. Use <leader>co to start one.", vim.log.levels.ERROR)
+            return
+          end
+        end
+        vim.ui.input({ prompt = "Cursor prompt: " }, function(input)
+          if not input or input == "" then return end
+          local payload = input:match("\n$") and input or (input .. "\n")
+          vim.api.nvim_chan_send(job_id, payload)
+          -- Focus the agent window so user sees the response
+          for _, win in ipairs(vim.api.nvim_list_wins()) do
+            if vim.api.nvim_win_get_buf(win) == buf then
+              vim.api.nvim_set_current_win(win)
+              if opts.start_in_insert then vim.cmd.startinsert() end
+              break
+            end
+          end
+        end)
+      end, { desc = "Prompt and send to Cursor agent terminal" })
+
       -- Plugin only supports float | horizontal | vertical | current; "tab" falls through to "current" and replaces your buffer.
       -- Override so :CursorAgentOpen / <leader>co open in a new tab when type is "tab".
       if win_type == "tab" then
         require("cursor_agent").open = function()
-          open_cursor_float({}, "Cursor Agent " .. os.date("%H:%M:%S"), {})
+          agent_tab_counter = agent_tab_counter + 1
+          local name = codenames[((agent_tab_counter - 1) % #codenames) + 1]
+          open_cursor_float({}, ("Cursor %s %d"):format(name, agent_tab_counter), {})
         end
       end
     end,
