@@ -1,4 +1,63 @@
+-- Shared: resolve Salesforce project root (dir containing sfdx-project.json or sf-project.json)
+local function sf_project_root()
+  local cwd = vim.fn.getcwd()
+  local dir = cwd
+  for _ = 1, 20 do
+    if vim.fn.filereadable(dir .. "/sfdx-project.json") == 1 or vim.fn.filereadable(dir .. "/sf-project.json") == 1 then
+      return dir
+    end
+    local parent = vim.fn.fnamemodify(dir, ":h")
+    if parent == dir then break end
+    dir = parent
+  end
+  return nil
+end
+
+-- Statusline: single cache, updated only when cwd changes (BufEnter), never on cursor/redraw
+local _sf_org_statusline = ""
+local _sf_org_statusline_cwd = ""
+
+local function _sf_refresh_statusline_org(force)
+  local cwd = vim.fn.getcwd()
+  if not force and cwd == _sf_org_statusline_cwd then return end
+  _sf_org_statusline_cwd = cwd
+  local root = sf_project_root()
+  if not root then
+    _sf_org_statusline = ""
+    return
+  end
+  local use_sf = vim.fn.executable("sf") == 1
+  local cmd = use_sf and "sf config get target-org 2>/dev/null" or "sfdx config:get target-org 2>/dev/null"
+  local out = vim.fn.system("cd " .. vim.fn.shellescape(root) .. " && " .. cmd)
+  _sf_org_statusline = ""
+  if out and out ~= "" then
+    local raw = out:gsub("^%s+", ""):gsub("%s+$", "")
+    local value = raw:match("target%-org%s+(.+)$") or raw
+    value = (value:gsub("^%s+", ""):gsub("%s+$", ""):gsub("[^%w%@%.%-%_]", "") or "")
+    if type(value) == "string" and value ~= "" then _sf_org_statusline = value end
+  end
+end
+
 return {
+  -- Lualine: show current Salesforce target org (cache only; refreshed on BufEnter or :SFRefreshOrg)
+  {
+    "nvim-lualine/lualine.nvim",
+    opts = function(_, opts)
+      vim.api.nvim_create_autocmd("BufEnter", {
+        callback = function() _sf_refresh_statusline_org() end,
+      })
+      vim.defer_fn(function() _sf_refresh_statusline_org() end, 0)
+      vim.api.nvim_create_user_command("SFRefreshOrg", function()
+        _sf_refresh_statusline_org(true)
+      end, { desc = "Refresh Salesforce org in statusline (run after changing target org)" })
+      table.insert(opts.sections.lualine_x, {
+        function()
+          if type(_sf_org_statusline) ~= "string" or _sf_org_statusline == "" then return "" end
+          return "SF: " .. _sf_org_statusline
+        end,
+      })
+    end,
+  },
   {
     "xixiaofinland/sf.nvim",
     dependencies = {
@@ -26,6 +85,169 @@ return {
           vim.notify("Nothing running on port 1717", vim.log.levels.INFO, { title = "Salesforce" })
         end
       end, { desc = "(Salesforce) Kill OAuth port 1717" })
+
+      -- Deploy from package: select manifest XML → select org → deploy in background, notify on completion
+      local function get_manifest_dir()
+        local cwd = vim.fn.getcwd()
+        local dir = cwd
+        for _ = 1, 20 do
+          if vim.fn.filereadable(dir .. "/sfdx-project.json") == 1 or vim.fn.filereadable(dir .. "/sf-project.json") == 1 then
+            local manifest = dir .. "/manifest"
+            if vim.fn.isdirectory(manifest) == 1 then
+              return manifest
+            end
+            return dir
+          end
+          local parent = vim.fn.fnamemodify(dir, ":h")
+          if parent == dir then break end
+          dir = parent
+        end
+        if vim.fn.isdirectory(cwd .. "/manifest") == 1 then
+          return cwd .. "/manifest"
+        end
+        return cwd
+      end
+
+      local function get_manifest_xml_files()
+        local manifest_dir = get_manifest_dir()
+        local pattern = manifest_dir .. "/*.xml"
+        local files = vim.fn.glob(pattern, true, true)
+        return files or {}
+      end
+
+      local function get_current_target_org()
+        local root = sf_project_root()
+        if not root then return nil, nil end
+        local use_sf = vim.fn.executable("sf") == 1
+        local cmd = use_sf and "sf config get target-org 2>/dev/null" or "sfdx config:get target-org 2>/dev/null"
+        local out = vim.fn.system("cd " .. vim.fn.shellescape(root) .. " && " .. cmd)
+        if not out or out == "" then return nil, nil end
+        local raw = out:gsub("^%s+", ""):gsub("%s+$", "")
+        local value = raw:match("target%-org%s+(.+)$") or raw
+        value = value:gsub("^%s+", ""):gsub("%s+$", ""):gsub("[^%w%@%.%-%_]", "") or ""
+        return value ~= "" and value or nil
+      end
+
+      local function get_org_list()
+        local use_sf = vim.fn.executable("sf") == 1
+        local cmd = use_sf and "sf org list --json" or "sfdx force:org:list --json"
+        local out = vim.fn.system(cmd)
+        if out == nil or out == "" then return {} end
+        local ok, data = pcall(vim.fn.json_decode, out)
+        if not ok or not data or not data.result then return {} end
+        local result = data.result
+        local orgs = {}
+        local function add(entry)
+          if not entry then return end
+          local alias = tostring(entry.alias or entry.username or "")
+          local username = tostring(entry.username or "")
+          local target = (entry.alias and entry.alias ~= "") and entry.alias or entry.username
+          if target and target ~= "" then
+            target = tostring(target)
+            table.insert(orgs, { display = alias .. (username ~= "" and (" (" .. username .. ")") or ""), target_org = target })
+          end
+        end
+        for _, e in ipairs(result.nonScratchOrgs or {}) do add(e) end
+        for _, e in ipairs(result.scratchOrgs or {}) do add(e) end
+        return orgs
+      end
+
+      local function run_deploy_background(manifest_path, target_org, dry_run)
+        local use_sf = vim.fn.executable("sf") == 1
+        local dry_flag = (dry_run == true) and " --dry-run" or ""
+        local cmd = use_sf
+          and ("sf project deploy start --manifest " .. vim.fn.shellescape(manifest_path) .. " --target-org " .. vim.fn.shellescape(target_org) .. dry_flag)
+          or ("sfdx force:source:deploy -x " .. vim.fn.shellescape(manifest_path) .. " -u " .. vim.fn.shellescape(target_org) .. dry_flag)
+        local verb = dry_run and "Validating" or "Deploying"
+        local verb_past = dry_run and "Validation" or "Deployment"
+        vim.notify(verb .. " to " .. target_org .. " ...", vim.log.levels.INFO, { title = "Salesforce" })
+        local stdout, stderr = {}, {}
+        local job_id = vim.fn.jobstart(cmd, {
+          stdout_buffered = true,
+          stderr_buffered = true,
+          on_stdout = function(_, data) if data then for _, l in ipairs(data) do table.insert(stdout, l) end end end,
+          on_stderr = function(_, data) if data then for _, l in ipairs(data) do table.insert(stderr, l) end end end,
+          on_exit = function(_, code)
+            vim.schedule(function()
+              if code == 0 then
+                vim.notify(verb_past .. " to " .. target_org .. " succeeded.", vim.log.levels.INFO, { title = "Salesforce" })
+              else
+                local msg = table.concat(stderr, " ")
+                if msg == "" then msg = table.concat(stdout, " ") end
+                vim.notify((verb_past .. " failed (exit %s). %s"):format(code, msg:sub(1, 200)), vim.log.levels.ERROR, { title = "Salesforce" })
+              end
+            end)
+          end,
+        })
+        if job_id <= 0 then
+          vim.notify("Failed to start " .. (dry_run and "validation" or "deploy") .. " job.", vim.log.levels.ERROR, { title = "Salesforce" })
+        end
+      end
+
+      local function start_package_flow(run_fn)
+        local xml_files = get_manifest_xml_files()
+        if #xml_files == 0 then
+          vim.notify("No *.xml files found in manifest folder.", vim.log.levels.WARN, { title = "Salesforce" })
+          return
+        end
+        vim.ui.select(xml_files, {
+          prompt = "Select package XML",
+          format_item = function(path)
+            return vim.fn.fnamemodify(path, ":t")
+          end,
+        }, function(manifest_path)
+          if not manifest_path then return end
+          local orgs = get_org_list()
+          if #orgs == 0 then
+            vim.notify("No orgs found. Run org login first (e.g. <leader>sfa).", vim.log.levels.WARN, { title = "Salesforce" })
+            return
+          end
+          vim.ui.select(orgs, {
+            prompt = "Select target org",
+            format_item = function(o)
+              return o.display
+            end,
+          }, function(chosen)
+            if chosen then run_fn(manifest_path, chosen.target_org) end
+          end)
+        end)
+      end
+
+      vim.api.nvim_create_user_command("DeployFromPackage", function()
+        start_package_flow(function(manifest_path, target_org)
+          run_deploy_background(manifest_path, target_org, false)
+        end)
+      end, { desc = "Deploy using a package XML from manifest folder" })
+
+      vim.api.nvim_create_user_command("ValidateFromPackage", function()
+        local xml_files = get_manifest_xml_files()
+        if #xml_files == 0 then
+          vim.notify("No *.xml files found in manifest folder.", vim.log.levels.WARN, { title = "Salesforce" })
+          return
+        end
+        vim.ui.select(xml_files, {
+          prompt = "Select package XML",
+          format_item = function(path)
+            return vim.fn.fnamemodify(path, ":t")
+          end,
+        }, function(manifest_path)
+          if not manifest_path then return end
+          local target_org = get_current_target_org()
+          if not target_org then
+            vim.notify("No target org set. Set one with <leader>sfs or sf config set target-org=...", vim.log.levels.WARN, { title = "Salesforce" })
+            return
+          end
+          local pkg_name = vim.fn.fnamemodify(manifest_path, ":t")
+          local choice = vim.fn.confirm(
+            ("Are you sure you want to validate this %s with this Salesforce org [%s]?"):format(pkg_name, target_org),
+            "&Yes\n&No",
+            2
+          )
+          if choice == 1 then
+            run_deploy_background(manifest_path, target_org, true)
+          end
+        end)
+      end, { desc = "Validate (dry-run) using a package XML with default org" })
 
       -- Org auth: select Login or Test (sandbox), then run web login in terminal
       vim.keymap.set("n", "<leader>sfa", function()
