@@ -13,8 +13,8 @@ local function sf_project_root()
   return nil
 end
 
--- Statusline: single cache, updated only when cwd changes (BufEnter), never on cursor/redraw
-local _sf_org_statusline = ""
+-- Single source of truth: current org alias (set by refresh from CLI or when user picks org in DeployFromPackage)
+local _sf_current_org_alias = ""
 local _sf_org_statusline_cwd = ""
 
 local function _sf_refresh_statusline_org(force)
@@ -23,19 +23,21 @@ local function _sf_refresh_statusline_org(force)
   _sf_org_statusline_cwd = cwd
   local root = sf_project_root()
   if not root then
-    _sf_org_statusline = ""
+    _sf_current_org_alias = ""
     return
   end
   local use_sf = vim.fn.executable("sf") == 1
-  local cmd = use_sf and "sf config get target-org 2>/dev/null" or "sfdx config:get target-org 2>/dev/null"
+  local cmd = use_sf and "sf org display --json 2>/dev/null" or "sfdx force:org:display --json 2>/dev/null"
   local out = vim.fn.system("cd " .. vim.fn.shellescape(root) .. " && " .. cmd)
-  _sf_org_statusline = ""
-  if out and out ~= "" then
-    local raw = out:gsub("^%s+", ""):gsub("%s+$", "")
-    local value = raw:match("target%-org%s+(.+)$") or raw
-    value = (value:gsub("^%s+", ""):gsub("%s+$", ""):gsub("[^%w%@%.%-%_]", "") or "")
-    if type(value) == "string" and value ~= "" then _sf_org_statusline = value end
+  local ok, data = pcall(vim.fn.json_decode, out)
+  if ok and data and data.result then
+    local r = data.result
+    local alias = (r.alias and r.alias ~= "") and r.alias or r.username
+    if type(alias) == "string" and alias ~= "" then
+      _sf_current_org_alias = alias
+    end
   end
+  -- When command fails or no result, leave _sf_current_org_alias unchanged (e.g. from DeployFromPackage)
 end
 
 return {
@@ -52,8 +54,8 @@ return {
       end, { desc = "Refresh Salesforce org in statusline (run after changing target org)" })
       table.insert(opts.sections.lualine_x, {
         function()
-          if type(_sf_org_statusline) ~= "string" or _sf_org_statusline == "" then return "" end
-          return "SF: " .. _sf_org_statusline
+          if type(_sf_current_org_alias) ~= "string" or _sf_current_org_alias == "" then return "" end
+          return "SF: " .. _sf_current_org_alias
         end,
       })
     end,
@@ -115,17 +117,9 @@ return {
         return files or {}
       end
 
+      -- Return the stored org alias (no CLI parsing); set via :SFRefreshOrg / BufEnter or when picking org in DeployFromPackage
       local function get_current_target_org()
-        local root = sf_project_root()
-        if not root then return nil, nil end
-        local use_sf = vim.fn.executable("sf") == 1
-        local cmd = use_sf and "sf config get target-org 2>/dev/null" or "sfdx config:get target-org 2>/dev/null"
-        local out = vim.fn.system("cd " .. vim.fn.shellescape(root) .. " && " .. cmd)
-        if not out or out == "" then return nil, nil end
-        local raw = out:gsub("^%s+", ""):gsub("%s+$", "")
-        local value = raw:match("target%-org%s+(.+)$") or raw
-        value = value:gsub("^%s+", ""):gsub("%s+$", ""):gsub("[^%w%@%.%-%_]", "") or ""
-        return value ~= "" and value or nil
+        return (type(_sf_current_org_alias) == "string" and _sf_current_org_alias ~= "") and _sf_current_org_alias or nil
       end
 
       local function get_org_list()
@@ -152,12 +146,22 @@ return {
         return orgs
       end
 
+      -- Wrap org in double quotes if it contains spaces (escape any " inside)
+      local function shellescape_org(org)
+        if type(org) ~= "string" then return vim.fn.shellescape(tostring(org)) end
+        if org:find("%s") then
+          return '"' .. org:gsub('"', '\\"') .. '"'
+        end
+        return vim.fn.shellescape(org)
+      end
+
       local function run_deploy_background(manifest_path, target_org, dry_run)
         local use_sf = vim.fn.executable("sf") == 1
         local dry_flag = (dry_run == true) and " --dry-run" or ""
+        local org_arg = shellescape_org(target_org)
         local cmd = use_sf
-          and ("sf project deploy start --manifest " .. vim.fn.shellescape(manifest_path) .. " --target-org " .. vim.fn.shellescape(target_org) .. dry_flag)
-          or ("sfdx force:source:deploy -x " .. vim.fn.shellescape(manifest_path) .. " -u " .. vim.fn.shellescape(target_org) .. dry_flag)
+          and ("sf project deploy start --manifest " .. vim.fn.shellescape(manifest_path) .. " --target-org " .. org_arg .. dry_flag)
+          or ("sfdx force:source:deploy -x " .. vim.fn.shellescape(manifest_path) .. " -u " .. org_arg .. dry_flag)
         local verb = dry_run and "Validating" or "Deploying"
         local verb_past = dry_run and "Validation" or "Deployment"
         vim.notify(verb .. " to " .. target_org .. " ...", vim.log.levels.INFO, { title = "Salesforce" })
@@ -207,8 +211,11 @@ return {
             format_item = function(o)
               return o.display
             end,
-          }, function(chosen)
-            if chosen then run_fn(manifest_path, chosen.target_org) end
+          },           function(chosen)
+            if chosen then
+              _sf_current_org_alias = chosen.target_org
+              run_fn(manifest_path, chosen.target_org)
+            end
           end)
         end)
       end
