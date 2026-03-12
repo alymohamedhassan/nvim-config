@@ -239,7 +239,7 @@ return {
       -- Override so :CursorAgentOpen / <leader>co open in a new tab when type is "tab".
       if win_type == "tab" then
         require("cursor_agent").open = function()
-          open_cursor_float({}, "Cursor Agent", {})
+          open_cursor_float({}, "Cursor Agent " .. os.date("%H:%M:%S"), {})
         end
       end
     end,
