@@ -188,6 +188,36 @@ return {
         end
       end
 
+      local function run_retrieve_background(manifest_path, target_org)
+        local use_sf = vim.fn.executable("sf") == 1
+        local org_arg = shellescape_org(target_org)
+        local cmd = use_sf
+          and ("sf project retrieve start --manifest " .. vim.fn.shellescape(manifest_path) .. " --target-org " .. org_arg)
+          or ("sfdx force:source:retrieve -x " .. vim.fn.shellescape(manifest_path) .. " -u " .. org_arg)
+        vim.notify("Retrieving from " .. target_org .. " ...", vim.log.levels.INFO, { title = "Salesforce" })
+        local stdout, stderr = {}, {}
+        local job_id = vim.fn.jobstart(cmd, {
+          stdout_buffered = true,
+          stderr_buffered = true,
+          on_stdout = function(_, data) if data then for _, l in ipairs(data) do table.insert(stdout, l) end end end,
+          on_stderr = function(_, data) if data then for _, l in ipairs(data) do table.insert(stderr, l) end end end,
+          on_exit = function(_, code)
+            vim.schedule(function()
+              if code == 0 then
+                vim.notify("Retrieve from " .. target_org .. " succeeded.", vim.log.levels.INFO, { title = "Salesforce" })
+              else
+                local msg = table.concat(stderr, " ")
+                if msg == "" then msg = table.concat(stdout, " ") end
+                vim.notify(("Retrieve failed (exit %s). %s"):format(code, msg:sub(1, 200)), vim.log.levels.ERROR, { title = "Salesforce" })
+              end
+            end)
+          end,
+        })
+        if job_id <= 0 then
+          vim.notify("Failed to start retrieve job.", vim.log.levels.ERROR, { title = "Salesforce" })
+        end
+      end
+
       local function start_package_flow(run_fn)
         local xml_files = get_manifest_xml_files()
         if #xml_files == 0 then
@@ -255,6 +285,36 @@ return {
           end
         end)
       end, { desc = "Validate (dry-run) using a package XML with default org" })
+
+      vim.api.nvim_create_user_command("RetrieveFromPackage", function()
+        local xml_files = get_manifest_xml_files()
+        if #xml_files == 0 then
+          vim.notify("No *.xml files found in manifest folder.", vim.log.levels.WARN, { title = "Salesforce" })
+          return
+        end
+        vim.ui.select(xml_files, {
+          prompt = "Select package XML",
+          format_item = function(path)
+            return vim.fn.fnamemodify(path, ":t")
+          end,
+        }, function(manifest_path)
+          if not manifest_path then return end
+          local target_org = get_current_target_org()
+          if not target_org then
+            vim.notify("No target org set. Set one with <leader>sfs or sf config set target-org=...", vim.log.levels.WARN, { title = "Salesforce" })
+            return
+          end
+          local pkg_name = vim.fn.fnamemodify(manifest_path, ":t")
+          local choice = vim.fn.confirm(
+            ("Are you sure you want to retrieve %s from this Salesforce org [%s]?"):format(pkg_name, target_org),
+            "&Yes\n&No",
+            2
+          )
+          if choice == 1 then
+            run_retrieve_background(manifest_path, target_org)
+          end
+        end)
+      end, { desc = "Retrieve using a package XML with default org" })
 
       -- Org auth: select Login or Test (sandbox), then run web login in terminal
       vim.keymap.set("n", "<leader>sfa", function()
