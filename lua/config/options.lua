@@ -13,3 +13,8 @@ vim.diagnostic.config({
   signs = true,
   underline = true,
 })
+
+-- Map uppercase quit commands to lowercase (e.g. :Q -> :q, :QA/:Qa -> :qa)
+vim.cmd("cnoreabbrev QA qa")
+vim.cmd("cnoreabbrev Qa qa")
+vim.cmd("cnoreabbrev Q q")
